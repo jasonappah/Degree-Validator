@@ -13,6 +13,9 @@ from dotenv import load_dotenv
 load_dotenv()
 import requests
 
+s = requests.Session()
+s.headers.update({"X-Api-Key": os.environ["NEBULA_API_KEY"]})
+
 class AssignmentStore:
     def __init__(self):
         # req -> course -> hours
@@ -123,8 +126,8 @@ class GraduationRequirementsSolver:
         matcher = Matcher.Builder("NameList")
         hrs = 0
         for reference in courses:
-            course_data = requests.get(headers={"X-Api-Key": os.environ["NEBULA_API_KEY"]}, url=f"https://api.utdnebula.com/course/{reference.class_reference}").json()
-            matcher.add_arg(f"{course_data['data']['subject_prefix']} {course_data['data']['course_number']}")
+            course_data = s.get(url=f"https://api.utdnebula.com/course/{reference.class_reference}").json()
+            matcher.add_arg(f"{course_data['data']['subject_prefix']}{course_data['data']['course_number']}")
             try:
                 hrs += int(course_data["data"]["credit_hours"])
             except ValueError:
@@ -150,7 +153,7 @@ class GraduationRequirementsSolver:
             elif option.type == RequirementTypes.course:
                 course_reqs.append(option)
             if o.required == 1 and option == o.options[0]:
-            total_hrs += hours
+                total_hrs += hours
         if len(course_reqs) > 0:
             matcher, hrs = self._course_requirements_to_name_list_matcher(course_reqs)
             total_hrs += hrs
@@ -163,12 +166,24 @@ class GraduationRequirementsSolver:
         self.groups.append([minimum_cumulative_hours])
         
         for o in degree.requirements.options:
+            # TODO: I'm assuming that every top level requirement is a collection, need to handle other requirement types too (I think only core and course requirements need to be handled)
             if (o.type == RequirementTypes.collection):
-                # TODO: I'm assuming that every top level requirement is a collection, need to handle other requirement types too (I think only core and course requirements need to be handled)
-                matcher, hours = self._collection_requirement_to_matcher(o)
-                requirement = Requirement(o.name, hours, matcher)
-                self.requirements_dict[o.name] = requirement
-                self.groups.append([requirement])
+                for group in o.options:
+                    if (group.type == RequirementTypes.collection):
+                        matcher, hours = self._collection_requirement_to_matcher(group)
+                        requirement = Requirement(group.name, hours, matcher)
+                        self.requirements_dict[group.name] = requirement
+                        self.groups.append([requirement])
+                    elif (group.type == RequirementTypes.core):
+                        matcher: Matcher = self._core_requirement_to_matcher(group)
+                        name = MockData.core_flag_to_group_name(group.core_flag)
+                        requirement = Requirement(name, group.hours, matcher)
+                        self.requirements_dict[name] = requirement
+                        self.groups.append([requirement])
+                    elif (group.type == RequirementTypes.other):
+                        # TODO: surface via api for user to manually validate
+                        print(group.description, group.condition)
+                        pass
         self.validate()       
     
     def load_requirements_from_file(self, filename):

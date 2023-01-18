@@ -267,3 +267,8 @@ class MockData:
         core_080 = ["BA 1310","BA 1320","CLDP 2314","CRIM 1301","CRIM 1307","ECON 2301","ECON 2302","GEOG 2303","GST 2300","PA 2325","PSY 2301","PSY 2314","SOC 1301","SOC 2300","SOC 2320"]
         core_080_matcher = NameListMatcher(*core_080)
         return core_080_matcher
+    
+    @staticmethod
+    def core_flag_to_group_name(flag: str):
+        core_map = {'010': "Core - Communication (010)", "020":"Core - Mathematics (020)", "030":"Core - Life and Physical Sciences (030)", "040":"Core - Language, Philosophy and Culture (040)", "050":"Core - Creative Arts (050)", "060":"Core - American History (060)","070":"Core - Government/Political Science (070)", "080":"Core - Social and Behavioral Sciences (080)", "090":"Core - Component Area Option (090)"}
+        return core_map[flag]
