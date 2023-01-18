@@ -121,14 +121,19 @@ class GraduationRequirementsSolver:
     
     def _course_requirements_to_name_list_matcher(self, courses: List[CourseRequirement]):
         matcher = Matcher.Builder("NameList")
-        # for reference in courses:
-        #     course_data = requests.get(headers={"X-Api-Key": os.environ["NEBULA_API_KEY"]}, url=f"https://api.utdnebula.com/course/{reference.course_id}").json()
-        #     matcher.add_arg(course_data.data.name)
-        return matcher.build()
+        hrs = 0
+        for reference in courses:
+            course_data = requests.get(headers={"X-Api-Key": os.environ["NEBULA_API_KEY"]}, url=f"https://api.utdnebula.com/course/{reference.class_reference}").json()
+            matcher.add_arg(f"{course_data['data']['subject_prefix']} {course_data['data']['course_number']}")
+            try:
+                hrs += int(course_data["data"]["credit_hours"])
+            except ValueError:
+                pass
+        return matcher.build(), hrs
     
     def _collection_requirement_to_matcher(self, o: CollectionRequirement):
         # TODO: revisit matcher selection logic, this is hacky at best
-        builder: Matcher.Builder = Matcher.Builder("Or" if o.required == 1 and len(o.options) == 2 else "And" if o.required == len(o.options) else "And")
+        builder: Matcher.Builder = Matcher.Builder("Or" if o.required == 1 else "And")
         total_hrs = 0
         # TODO: correctly tabulate total hours considering required number of options
         course_reqs: List[CourseRequirement] = []
@@ -144,9 +149,12 @@ class GraduationRequirementsSolver:
                 builder.add_arg(matcher)
             elif option.type == RequirementTypes.course:
                 course_reqs.append(option)
+            if o.required == 1 and option == o.options[0]:
             total_hrs += hours
         if len(course_reqs) > 0:
-            builder.add_arg(self._course_requirements_to_name_list_matcher(course_reqs))
+            matcher, hrs = self._course_requirements_to_name_list_matcher(course_reqs)
+            total_hrs += hrs
+            builder.add_arg(matcher)
         return builder.build(), total_hrs
 
     def load_requirements_from_degree(self, degree: Degree):
